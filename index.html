@@ -221,6 +221,25 @@ async function rigBuilder() {
       unknown.length ? `무게 미기록: ${unknown.join(', ')} (탑재한도 ${limit} kg)` :
       `탑재 ${sum.toFixed(1)} kg / 한도 ${limit} kg (${Math.round(sum / limit * 100)}%)${sum / limit > 0.7 ? ' — 권장(70%) 초과' : ''}`);
   }
+  // 광학 계산: 배율 = 경통 초점거리 / 접안렌즈 초점거리, 실시야 = 겉보기시야 / 배율, 사출동공 = 구경 / 배율
+  const optics = [];
+  const num = (id, col) => parseFloat(spec[id]?.[col]);
+  if (rig.OT) {
+    const F = num(rig.OT, '초점거리_mm'), D = num(rig.OT, '구경_mm');
+    if (F && D) optics.push(`${rig.OT}: 구경 ${D} mm · 초점거리 ${F} mm · f/${(F / D).toFixed(1)} · 최대 유효배율 약 ${Math.round(2 * D)}×`);
+    if (rig.EP) {
+      const f = num(rig.EP, '초점거리_mm'), afov = num(rig.EP, '겉보기시야_도');
+      const missing = [!F && `${rig.OT} 초점거리_mm`, !f && `${rig.EP} 초점거리_mm`].filter(Boolean);
+      if (missing.length) optics.push(`배율 계산에 필요한 값 미기록: ${missing.join(', ')}`);
+      else {
+        const mag = F / f;
+        optics.push(`배율 ${mag.toFixed(0)}× (${F} ÷ ${f})${D && mag > 2 * D ? ' — 최대 유효배율 초과' : ''}`);
+        optics.push(afov ? `실시야 ${(afov / mag).toFixed(2)}° (${Math.round(afov / mag * 60)}′) — 겉보기시야 ${afov}°` : `실시야: ${rig.EP} 겉보기시야_도 미기록`);
+        if (D) optics.push(`사출동공 ${(D / mag).toFixed(1)} mm`);
+      }
+    }
+  }
+
   Object.values(rig).forEach(id => {
     if (out.has(id)) checks.push(`${id}: 반출 중`);
     if (byId[id] && !['정상', '제한사용'].includes(byId[id]['상태'])) checks.push(`${id}: 상태 ${byId[id]['상태'] || '미기록'}`);
@@ -229,6 +248,7 @@ async function rigBuilder() {
   $('#view').innerHTML = `<div class="cols">
     <div><h2>장비 (끌어서 오른쪽에 놓거나 누르기)</h2><div class="zone" id="pool">${pool.map(a => card(a, out.has(a['관리번호']) ? 'warn' : '')).join('')}</div></div>
     <div><h2>조합</h2><div class="slots">${SLOTS.map(([p, label]) => `<div class="slot" data-p="${p}"><span>${label}</span>${rig[p] && byId[rig[p]] ? card(byId[rig[p]]) : '<span class="dim">비어 있음</span>'}</div>`).join('')}</div>
+    ${optics.length ? `<ul class="checks">${optics.map(c => `<li>${esc(c)}</li>`).join('')}</ul>` : ''}
     <ul class="checks">${checks.map(c => `<li>${esc(c)}</li>`).join('') || '<li class="dim">장비를 두 개 이상 놓으면 호환·무게를 확인합니다.</li>'}</ul></div></div>`;
 
   const place = id => { const p = id.slice(0, 2); if (SLOTS.some(([s]) => s === p)) { rig[p] = id; rigBuilder(); } };
