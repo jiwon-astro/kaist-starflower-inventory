@@ -53,6 +53,10 @@
   dialog::backdrop { background: rgba(0, 0, 0, 0.6); }
   dialog header { margin-bottom: 12px; }
   dialog button { all: unset; cursor: pointer; color: var(--muted); }
+  dl { display: grid; grid-template-columns: max-content 1fr; gap: 6px 16px; margin: 0 0 16px; }
+  dt { color: var(--muted); }
+  dd { margin: 0; }
+  dialog h3 { font-size: 12px; font-weight: 600; color: var(--muted); margin: 16px 0 8px; border-bottom: 1px solid var(--line); padding-bottom: 4px; }
   figure { margin: 0 0 16px; }
   figure img { width: 100%; display: block; background: var(--soft); }
   figcaption { color: var(--muted); font-size: 12px; margin-top: 4px; }
@@ -124,25 +128,68 @@ async function loadPhotos() {
   if (!photos) photos = SCRIPT_URL ? await fetch(SCRIPT_URL).then(r => r.json()).catch(() => ({})) : {};
   return photos;
 }
-function openPhotos(code, name) {
-  $('#photo-title').textContent = `${code} ${name}`;
-  $('#photos').innerHTML = (photos[code] || []).map(p => `<figure><a href="https://drive.google.com/file/d/${esc(p.id)}/view" target="_blank" rel="noopener">` +
+// 분류별로 보여 줄 성능 항목 (성능 탭의 열 이름). 열을 늘리면 여기에도 추가.
+const SPEC_FIELDS = {
+  OT: ['구경_mm', '초점거리_mm', '무게_kg', '광학 규격', '장착 규격'],
+  MT: ['탑재한도_kg', '무게_kg', '장착 규격', '전원'],
+  TP: ['무게_kg', '장착 규격'],
+  EP: ['초점거리_mm', '겉보기시야_도', '광학 규격'],
+  GU: ['구경_mm', '초점거리_mm', '장착 규격'],
+  CA: ['센서', '픽셀크기_um', '광학 규격', '전원', '무게_kg'],
+  LE: ['초점거리_mm', '광학 규격'],
+  CO: ['광학 규격'], DG: ['광학 규격'], FL: ['광학 규격'], FW: ['광학 규격', '전원'], FC: ['광학 규격'], AD: ['광학 규격', '장착 규격'],
+  CT: ['전원'], PW: ['전원', '용량_Wh'], CB: ['전원'], CW: ['무게_kg'],
+};
+const fieldsOf = code => SPEC_FIELDS[code.slice(0, 2)] || ['무게_kg'];
+const SPEC_TAIL = ['근거', '확인일', '비고'];
+
+// 장비 상세: 물품 정보 + 분류별 성능 + 사진
+async function openItem(code) {
+  const [assets, specs] = await Promise.all([load('물품'), load('성능')]).then(r => r.map(objects));
+  await loadPhotos();
+  const a = assets.find(x => x['관리번호'] === code) || {}, sp = specs.find(x => x['관리번호'] === code) || {};
+  const row = (k, v) => `<dt>${esc(k)}</dt><dd>${v ? esc(v) : '<span class="dim">—</span>'}</dd>`;
+  const info = ['분류', '상태', '위치', '소속', '호환', '최근점검일', '기존번호', '비고'].filter(k => a[k]).map(k => row(k, a[k])).join('');
+  const spec = fieldsOf(code).map(k => row(k, sp[k])).join('') + SPEC_TAIL.filter(k => sp[k]).map(k => row(k, sp[k])).join('');
+  const pics = (photos[code] || []).map(p => `<figure><a href="https://drive.google.com/file/d/${esc(p.id)}/view" target="_blank" rel="noopener">` +
     `<img src="https://drive.google.com/thumbnail?id=${esc(p.id)}&sz=w1000" alt="${esc(code)} 사진" loading="lazy"></a>` +
     `<figcaption>${esc(p.date.replace(/(\d{4})(\d\d)(\d\d)/, '$1-$2-$3'))} · ${esc(p.name)}</figcaption></figure>`).join('');
-  $('#photo').showModal();
+  $('#photo-title').textContent = `${code} ${a['물품명'] || ''}`;
+  $('#photos').innerHTML = `<dl>${info}</dl><h3>성능</h3><dl>${spec}</dl><h3>사진</h3>` +
+    (pics || '<p class="dim">사진 없음 (별바라기-장비사진 폴더에 관리번호_날짜 형식으로 올리기)</p>');
+  if (!$('#photo').open) $('#photo').showModal();
 }
+const linkItems = root => root.querySelectorAll('[data-code]').forEach(b => b.onclick = () => openItem(b.dataset.code));
 
 function table(rows) {
   const [head = [], ...body] = rows;
   const shown = body.filter(r => hit(r.join(' ')));
   const [ci, ni] = [head.indexOf('관리번호'), head.indexOf('물품명')];
   const link = s => /^https?:\/\//.test(s) ? `<a href="${esc(s)}" target="_blank" rel="noopener">링크</a>` : esc(s);
-  const cell = (s, i, r) => i === ni && photos?.[r[ci]]?.length ? `<button class="link" data-code="${esc(r[ci])}">${esc(s)}</button>` : link(s);
+  const mark = code => photos?.[code]?.length ? ' <span class="dim">· 사진</span>' : '';
+  const cell = (s, i, r) => ci >= 0 && i === ni && r[ci] ? `<button class="link" data-code="${esc(r[ci])}">${esc(s)}</button>${mark(r[ci])}` : link(s);
   $('#count').textContent = body.length ? `${shown.length} / ${body.length}` : '';
   $('#view').innerHTML = `<div class="wrap"><table><thead><tr>${head.map(h => `<th>${esc(h)}</th>`).join('')}</tr></thead><tbody>` +
     (body.length ? shown.map(r => `<tr>${r.map((c, i) => `<td>${cell(c, i, r)}</td>`).join('')}</tr>`).join('')
                  : `<tr><td class="dim" colspan="${head.length}">비어 있음</td></tr>`) + '</tbody></table></div>';
-  $('#view').querySelectorAll('[data-code]').forEach(b => b.onclick = () => openPhotos(b.dataset.code, b.textContent));
+  linkItems($('#view'));
+}
+
+// 성능: 분류별 표, 그 분류에 맞는 열만
+async function specView() {
+  const [assets, specs] = await Promise.all([load('물품'), load('성능')]).then(r => r.map(objects));
+  const cat = Object.fromEntries(assets.map(a => [a['관리번호'], a['분류'] || a['관리번호'].slice(0, 2)]));
+  const shown = specs.filter(s => s['관리번호'] && hit(Object.values(s).join(' ') + ' ' + cat[s['관리번호']]));
+  const groups = new Map();
+  shown.forEach(s => { const k = cat[s['관리번호']] || s['관리번호'].slice(0, 2); if (!groups.has(k)) groups.set(k, []); groups.get(k).push(s); });
+  $('#count').textContent = `${shown.length} / ${specs.length}`;
+  $('#view').innerHTML = [...groups].map(([k, list]) => {
+    const cols = [...fieldsOf(list[0]['관리번호']), ...SPEC_TAIL];
+    return `<h2 style="margin-top:24px">${esc(k)} ${list.length}</h2><div class="wrap"><table><thead><tr><th>관리번호</th><th>물품명</th>${cols.map(c => `<th>${esc(c)}</th>`).join('')}</tr></thead><tbody>` +
+      list.map(s => `<tr><td>${esc(s['관리번호'])}</td><td><button class="link" data-code="${esc(s['관리번호'])}">${esc(s['물품명'])}</button></td>${cols.map(c => `<td>${esc(s[c])}</td>`).join('')}</tr>`).join('') +
+      '</tbody></table></div>';
+  }).join('') || '<p class="dim">결과 없음</p>';
+  linkItems($('#view'));
 }
 
 // div + role=button: Firefox는 <button>의 드래그를 막음
@@ -279,6 +326,7 @@ async function show(view) {
   try {
     if (view === '반출') await loanBoard();
     else if (view === '조합') await rigBuilder();
+    else if (view === '성능') await specView();
     else { const [rows] = await Promise.all([load(view), view === '물품' && loadPhotos()]); if (current === view) table(rows); }
   } catch { $('#view').innerHTML = '<p class="dim">시트를 불러오지 못했습니다. SHEET_ID와 공유 설정(링크가 있는 모든 사용자)을 확인하세요.</p>'; }
 }

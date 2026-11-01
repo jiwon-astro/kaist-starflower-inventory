@@ -4,12 +4,16 @@
 //       → 배포 → 새 배포 → 웹 앱 (실행: 나, 액세스: 모든 사용자) → 주소를 index.html SCRIPT_URL에
 // 코드를 고친 뒤에는 배포 → 배포 관리 → 수정 → 새 버전 (주소 유지)
 
-// 사진 파일명: 관리번호로 시작하고 날짜(YYYYMMDD 또는 YYYY-MM-DD)가 들어 있으면 됨. 이름은 선택.
-// 예: MT07_20261101.jpg, MT07_AZ-GTi_20261101.jpg, MT07-2026-11-01.png. 둘 중 하나라도 없으면 무시.
+// 사진 파일명: 관리번호로 시작하고 날짜(YYYYMMDD, YYMMDD, YYYY-MM-DD)가 들어 있으면 됨. 이름·확장자는 선택.
+// 예: PW07_261101, MT07_20261101.jpg, MT07_AZ-GTi_20261101.jpg, MT07-2026-11-01.png. 둘 중 하나라도 없으면 무시.
 function parsePhotoName(name) {
-  const m = name.match(/^([A-Z]{2}\d{2,})([_\-\s].*)?\.[a-z0-9]+$/i);
-  const d = m && (m[2] || '').match(/(\d{4})-?(\d{2})-?(\d{2})(?!.*\d{4}-?\d{2}-?\d{2})/); // 마지막 날짜
-  return d ? { code: m[1].toUpperCase(), date: d[1] + d[2] + d[3] } : null;
+  const m = name.match(/^([A-Z]{2}\d{2,})([_\-\s].*)?$/i);
+  if (!m) return null;
+  const re = /(?<!\d)(\d{4}|\d{2})-?(\d{2})-?(\d{2})(?!\d)/g;
+  let d, last = null;
+  while ((d = re.exec(m[2] || ''))) last = d; // 마지막 날짜
+  if (!last) return null;
+  return { code: m[1].toUpperCase(), date: (last[1].length === 2 ? '20' + last[1] : last[1]) + last[2] + last[3] };
 }
 
 function doGet() {
