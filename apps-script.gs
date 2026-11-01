@@ -13,7 +13,8 @@ function parsePhotoName(name) {
 }
 
 function doGet() {
-  const folder = DriveApp.getFolderById(PropertiesService.getScriptProperties().getProperty('PHOTO_FOLDER'));
+  const raw = PropertiesService.getScriptProperties().getProperty('PHOTO_FOLDER') || '';
+  const folder = DriveApp.getFolderById((raw.match(/[-\w]{25,}/) || [raw])[0]); // 폴더 주소 전체를 넣어도 ID만 꺼냄
   const out = {};
   const files = folder.getFiles();
   while (files.hasNext()) {
