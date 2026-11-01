@@ -29,9 +29,13 @@
   td:first-child { font-weight: 600; }
   .dim { color: var(--muted); }
   .cols { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
-  .zone { border: 1px solid var(--line); padding: 12px; min-height: 160px; display: flex; flex-wrap: wrap; align-content: flex-start; gap: 8px; }
+  .zone { border: 1px solid var(--line); padding: 12px; min-height: 160px; display: grid; align-content: start; gap: 8px; }
+  .box { border: 1px solid var(--line); padding: 8px; display: flex; flex-wrap: wrap; gap: 6px; }
+  .box h3 { width: 100%; margin: 0 0 2px; font-size: 12px; font-weight: 600; color: var(--muted); }
+  .box .card { background: var(--soft); border-color: transparent; }
+  .box .card:hover, .box .card:focus-visible { border-color: var(--fg); }
   .zone.over { border-color: var(--fg); background: var(--soft); }
-  .zone h2 { width: 100%; }
+  .zone h2 { margin: 0; }
   .card { cursor: grab; user-select: none; border: 1px solid var(--line); padding: 6px 10px; background: var(--bg); max-width: 100%; }
   .card b { margin-right: 6px; }
   .card:hover, .card:focus-visible { border-color: var(--fg); outline: none; }
@@ -144,6 +148,14 @@ function table(rows) {
 // div + role=button: Firefox는 <button>의 드래그를 막음
 const card = (a, extra = '') => `<div class="card ${extra}" role="button" tabindex="0" draggable="true" data-id="${esc(a['관리번호'])}"><b>${esc(a['관리번호'])}</b>${esc(a['물품명'])}</div>`;
 
+// 분류별 박스: [이름, 물품들] 순서대로 박스를 그림
+function boxes(list, keyOf, extra = () => '') {
+  const m = new Map();
+  list.forEach(a => { const k = keyOf(a); if (!m.has(k)) m.set(k, []); m.get(k).push(a); });
+  return [...m].map(([k, items]) => `<div class="box"><h3>${esc(k)} ${items.length}</h3>${items.map(a => card(a, extra(a))).join('')}</div>`).join('');
+}
+const categoryOf = a => a['분류'] || a['관리번호'].slice(0, 2);
+
 function dropzone(el, onDrop) {
   el.ondragover = e => { e.preventDefault(); el.classList.add('over'); };
   el.ondragleave = () => el.classList.remove('over');
@@ -170,8 +182,8 @@ async function loanBoard() {
       <span class="muted">${SCRIPT_URL ? '카드를 끌어 옮기거나 눌러서 반출·반납' : '기록 기능 미설치 (보기 전용)'}</span>
     </div>
     <div class="cols">
-      <div class="zone" id="store"><h2>창고 ${store.length}</h2>${store.map(a => card(a, a['상태'] === '수리필요' ? 'warn' : '')).join('')}</div>
-      <div class="zone" id="away"><h2>반출 중 ${away.length}</h2>${away.map(a => card(a)).join('')}</div>
+      <div class="zone" id="store"><h2>창고 ${store.length}</h2>${boxes(store, categoryOf, a => a['상태'] === '수리필요' ? 'warn' : '')}</div>
+      <div class="zone" id="away"><h2>반출 중 ${away.length}</h2>${boxes(away, categoryOf)}</div>
     </div>`;
   ['event', 'who'].forEach(k => $('#' + k).onchange = e => { try { localStorage.setItem(k, e.target.value); } catch {} });
   const move = async (id, to) => {
@@ -246,7 +258,7 @@ async function rigBuilder() {
   });
 
   $('#view').innerHTML = `<div class="cols">
-    <div><h2>장비 (끌어서 오른쪽에 놓거나 누르기)</h2><div class="zone" id="pool">${pool.map(a => card(a, out.has(a['관리번호']) ? 'warn' : '')).join('')}</div></div>
+    <div><h2>장비 (끌어서 오른쪽에 놓거나 누르기)</h2><div class="zone" id="pool">${boxes(SLOTS.flatMap(([p]) => pool.filter(a => a['관리번호'].startsWith(p))), a => SLOTS.find(([p]) => a['관리번호'].startsWith(p))[1], a => out.has(a['관리번호']) ? 'warn' : '')}</div></div>
     <div><h2>조합</h2><div class="slots">${SLOTS.map(([p, label]) => `<div class="slot" data-p="${p}"><span>${label}</span>${rig[p] && byId[rig[p]] ? card(byId[rig[p]]) : '<span class="dim">비어 있음</span>'}</div>`).join('')}</div>
     ${optics.length ? `<ul class="checks">${optics.map(c => `<li>${esc(c)}</li>`).join('')}</ul>` : ''}
     <ul class="checks">${checks.map(c => `<li>${esc(c)}</li>`).join('') || '<li class="dim">장비를 두 개 이상 놓으면 호환·무게를 확인합니다.</li>'}</ul></div></div>`;
