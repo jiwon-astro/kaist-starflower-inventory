@@ -1,6 +1,6 @@
 # 별바라기 장비실
 
-- 조회 페이지: https://jiwon-astro.github.io/byeolbaragi-inventory/
+- 조회 페이지: https://jiwon-astro.github.io/kaist-starflower-inventory/
 - 원본(편집): [별바라기 물품대장 Google 시트](https://docs.google.com/spreadsheets/d/15LG_ahpBWunANCyk_0AsmTF4B6I2qQV2jct16SaYqW0/edit)
 
 데이터는 Google 시트에서만 고칩니다. 이 페이지는 열 때마다 시트를 읽으므로 다시 배포할 필요가 없습니다.
