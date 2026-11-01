@@ -1,0 +1,102 @@
+<!doctype html>
+<html lang="ko">
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>별바라기 장비실</title>
+<style>
+  :root { --fg:#000; --bg:#fff; --muted:#6b6b6b; --line:#e5e5e5; }
+  @media (prefers-color-scheme: dark) { :root { --fg:#f2f2f2; --bg:#0a0a0a; --muted:#8a8a8a; --line:#262626; } }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--fg); font: 14px/1.5 "Pretendard", "Malgun Gothic", system-ui, sans-serif; }
+  main { max-width: 1100px; margin: 0 auto; padding: 40px 16px; }
+  header { display: flex; justify-content: space-between; align-items: baseline; gap: 16px; flex-wrap: wrap; }
+  h1 { font-size: 20px; margin: 0; letter-spacing: -0.01em; }
+  a { color: inherit; }
+  nav { display: flex; gap: 24px; margin: 32px 0 16px; border-bottom: 1px solid var(--line); }
+  nav button { all: unset; cursor: pointer; padding: 8px 0; color: var(--muted); border-bottom: 2px solid transparent; margin-bottom: -1px; }
+  nav button[aria-selected="true"] { color: var(--fg); border-color: var(--fg); }
+  nav button:focus-visible { outline: 2px solid var(--fg); outline-offset: 2px; }
+  input { width: 100%; max-width: 320px; padding: 8px 10px; border: 1px solid var(--line); background: var(--bg); color: var(--fg); font: inherit; }
+  input:focus { outline: none; border-color: var(--fg); }
+  .bar { display: flex; justify-content: space-between; align-items: center; gap: 12px; margin-bottom: 12px; }
+  .count, .muted { color: var(--muted); font-size: 13px; white-space: nowrap; }
+  .wrap { overflow-x: auto; }
+  table { width: 100%; border-collapse: collapse; white-space: nowrap; }
+  th { text-align: left; font-weight: 600; font-size: 12px; color: var(--muted); padding: 8px 12px 8px 0; border-bottom: 1px solid var(--fg); }
+  td { padding: 10px 12px 10px 0; border-bottom: 1px solid var(--line); }
+  td:first-child { font-variant-numeric: tabular-nums; font-weight: 600; }
+  .dim { color: var(--muted); }
+</style>
+<main>
+  <header>
+    <h1>별바라기 장비실</h1>
+    <a id="edit" class="muted" target="_blank" rel="noopener">시트에서 편집 →</a>
+  </header>
+  <nav role="tablist">
+    <button role="tab" data-sheet="물품">물품 목록</button>
+    <button role="tab" data-sheet="호환">호환표</button>
+    <button role="tab" data-sheet="구매">구매 필요</button>
+  </nav>
+  <div class="bar">
+    <input id="q" type="search" placeholder="검색 (이름, 번호, 위치…)" aria-label="검색">
+    <span id="count" class="count"></span>
+  </div>
+  <div class="wrap"><table id="t"></table></div>
+</main>
+<script>
+// Google 시트 ID (docs.google.com/spreadsheets/d/<여기>/edit). 시트 공유: "링크가 있는 모든 사용자 - 뷰어".
+const SHEET_ID = '15LG_ahpBWunANCyk_0AsmTF4B6I2qQV2jct16SaYqW0';
+
+const $ = s => document.querySelector(s);
+const cache = {};
+let rows = [], current;
+
+function parseCSV(text) {
+  const out = []; let row = [], cell = '', q = false;
+  for (let i = 0; i < text.length; i++) {
+    const c = text[i];
+    if (q) { if (c === '"' && text[i + 1] === '"') { cell += '"'; i++; } else if (c === '"') q = false; else cell += c; }
+    else if (c === '"') q = true;
+    else if (c === ',') { row.push(cell); cell = ''; }
+    else if (c === '\n') { row.push(cell); out.push(row); row = []; cell = ''; }
+    else if (c !== '\r') cell += c;
+  }
+  if (cell || row.length) { row.push(cell); out.push(row); }
+  return out;
+}
+
+async function load(sheet) {
+  if (!cache[sheet]) {
+    const url = `https://docs.google.com/spreadsheets/d/${SHEET_ID}/gviz/tq?tqx=out:csv&headers=1&sheet=${encodeURIComponent(sheet)}`;
+    const res = await fetch(url);
+    if (!res.ok || !res.headers.get('content-type')?.includes('csv')) throw new Error(res.status); // 비공개 시트는 로그인 HTML을 돌려줌
+    cache[sheet] = parseCSV(await res.text()).filter(r => r.some(c => c.trim()));
+  }
+  return cache[sheet];
+}
+
+function render() {
+  const [head = [], ...body] = rows;
+  const terms = $('#q').value.trim().toLowerCase().split(/\s+/).filter(Boolean);
+  const hit = body.filter(r => terms.every(t => r.join(' ').toLowerCase().includes(t)));
+  const esc = s => s.replace(/[&<>]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;' }[c]));
+  const cell = s => /^https?:\/\//.test(s) ? `<a href="${esc(s)}" target="_blank" rel="noopener">링크</a>` : esc(s);
+  $('#t').innerHTML = `<thead><tr>${head.map(h => `<th>${esc(h)}</th>`).join('')}</tr></thead>` +
+    `<tbody>${hit.map(r => `<tr>${r.map(c => `<td>${cell(c)}</td>`).join('')}</tr>`).join('')}</tbody>`;
+  $('#count').textContent = body.length ? `${hit.length} / ${body.length}` : '';
+  if (head.length && !body.length) $('#t').innerHTML += `<tbody><tr><td class="dim" colspan="${head.length}">비어 있음</td></tr></tbody>`;
+}
+
+async function show(sheet) {
+  current = sheet;
+  document.querySelectorAll('nav button').forEach(b => b.setAttribute('aria-selected', b.dataset.sheet === sheet));
+  $('#t').innerHTML = '<tr><td class="dim">불러오는 중…</td></tr>';
+  try { rows = await load(sheet); if (current === sheet) render(); }
+  catch { $('#t').innerHTML = '<tr><td class="dim">시트를 불러오지 못했습니다. SHEET_ID와 공유 설정(링크가 있는 모든 사용자)을 확인하세요.</td></tr>'; }
+}
+
+$('#edit').href = `https://docs.google.com/spreadsheets/d/${SHEET_ID}/edit`;
+document.querySelectorAll('nav button').forEach(b => b.onclick = () => show(b.dataset.sheet));
+$('#q').oninput = render;
+show('물품');
+</script>
