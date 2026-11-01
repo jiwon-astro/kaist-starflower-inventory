@@ -1,7 +1,26 @@
-// 별바라기 장비실: 웹 페이지의 반출 보드가 '반출' 탭에 기록하도록 하는 스크립트.
+// 별바라기 장비실: 웹 페이지의 반출 보드가 '반출' 탭에 기록하고, 장비 사진 목록을 읽도록 하는 스크립트.
 // 설치: 시트 → 확장 프로그램 → Apps Script → 이 내용을 붙여 넣기
-//       → 프로젝트 설정 → 스크립트 속성에 PASSWORD (운영진 공용 비밀번호) 추가
+//       → 프로젝트 설정 → 스크립트 속성에 PASSWORD (운영진 공용 비밀번호), PHOTO_FOLDER (사진 폴더 ID) 추가
 //       → 배포 → 새 배포 → 웹 앱 (실행: 나, 액세스: 모든 사용자) → 주소를 index.html SCRIPT_URL에
+// 코드를 고친 뒤에는 배포 → 배포 관리 → 수정 → 새 버전 (주소 유지)
+
+// 사진 파일명: 관리번호_이름_YYYYMMDD.확장자 (예: MT07_AZ-GTi_20261101.jpg). 규칙에 안 맞는 파일은 무시.
+const PHOTO_NAME = /^([A-Z]{2}\d{2,})_(.+)_(\d{8})\.[a-z0-9]+$/i;
+
+function doGet() {
+  const folder = DriveApp.getFolderById(PropertiesService.getScriptProperties().getProperty('PHOTO_FOLDER'));
+  const out = {};
+  const files = folder.getFiles();
+  while (files.hasNext()) {
+    const f = files.next();
+    const m = f.getName().match(PHOTO_NAME);
+    if (!m || !f.getMimeType().startsWith('image/')) continue;
+    const id = m[1].toUpperCase();
+    (out[id] = out[id] || []).push({ id: f.getId(), name: f.getName(), date: m[3] });
+  }
+  Object.values(out).forEach(list => list.sort((a, b) => b.date.localeCompare(a.date))); // 최신 사진 먼저
+  return reply(out);
+}
 
 function doPost(e) {
   const req = JSON.parse(e.postData.contents);

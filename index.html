@@ -44,6 +44,14 @@
   .checks li { padding: 6px 0; border-bottom: 1px solid var(--line); }
   .fields { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 12px; }
   .fields input { width: 160px; }
+  .link { all: unset; cursor: pointer; text-decoration: underline; text-underline-offset: 3px; }
+  dialog { border: 1px solid var(--fg); background: var(--bg); color: var(--fg); padding: 16px; width: min(720px, calc(100vw - 32px)); max-height: calc(100vh - 32px); }
+  dialog::backdrop { background: rgba(0, 0, 0, 0.6); }
+  dialog header { margin-bottom: 12px; }
+  dialog button { all: unset; cursor: pointer; color: var(--muted); }
+  figure { margin: 0 0 16px; }
+  figure img { width: 100%; display: block; background: var(--soft); }
+  figcaption { color: var(--muted); font-size: 12px; margin-top: 4px; }
   @media (max-width: 640px) { .cols { grid-template-columns: 1fr; } }
 </style>
 <main>
@@ -64,10 +72,11 @@
   </div>
   <div id="view"></div>
 </main>
+<dialog id="photo" aria-labelledby="photo-title"><header><b id="photo-title"></b> <button id="photo-close">닫기</button></header><div id="photos"></div></dialog>
 <script>
 // Google 시트 ID (docs.google.com/spreadsheets/d/<여기>/edit). 시트 공유: "링크가 있는 모든 사용자 - 뷰어" 이상.
 const SHEET_ID = '15LG_ahpBWunANCyk_0AsmTF4B6I2qQV2jct16SaYqW0';
-// apps-script.gs를 웹 앱으로 배포한 주소. 비어 있으면 반출 보드는 보기만 가능.
+// apps-script.gs를 웹 앱으로 배포한 주소. 비어 있으면 반출 보드는 보기만 가능하고 사진도 안 보임.
 const SCRIPT_URL = '';
 
 const $ = s => document.querySelector(s);
@@ -105,14 +114,31 @@ const terms = () => $('#q').value.trim().toLowerCase().split(/\s+/).filter(Boole
 const hit = text => terms().every(t => text.toLowerCase().includes(t));
 const GONE = ['분실', '폐기'];
 
+// 관리번호 → [{id, name, date}] (Apps Script가 사진 폴더를 읽어 줌, 최신 먼저)
+let photos;
+async function loadPhotos() {
+  if (!photos) photos = SCRIPT_URL ? await fetch(SCRIPT_URL).then(r => r.json()).catch(() => ({})) : {};
+  return photos;
+}
+function openPhotos(code, name) {
+  $('#photo-title').textContent = `${code} ${name}`;
+  $('#photos').innerHTML = (photos[code] || []).map(p => `<figure><a href="https://drive.google.com/file/d/${esc(p.id)}/view" target="_blank" rel="noopener">` +
+    `<img src="https://drive.google.com/thumbnail?id=${esc(p.id)}&sz=w1000" alt="${esc(code)} 사진" loading="lazy"></a>` +
+    `<figcaption>${esc(p.date.replace(/(\d{4})(\d\d)(\d\d)/, '$1-$2-$3'))} · ${esc(p.name)}</figcaption></figure>`).join('');
+  $('#photo').showModal();
+}
+
 function table(rows) {
   const [head = [], ...body] = rows;
   const shown = body.filter(r => hit(r.join(' ')));
-  const cell = s => /^https?:\/\//.test(s) ? `<a href="${esc(s)}" target="_blank" rel="noopener">링크</a>` : esc(s);
+  const [ci, ni] = [head.indexOf('관리번호'), head.indexOf('물품명')];
+  const link = s => /^https?:\/\//.test(s) ? `<a href="${esc(s)}" target="_blank" rel="noopener">링크</a>` : esc(s);
+  const cell = (s, i, r) => i === ni && photos?.[r[ci]]?.length ? `<button class="link" data-code="${esc(r[ci])}">${esc(s)}</button>` : link(s);
   $('#count').textContent = body.length ? `${shown.length} / ${body.length}` : '';
   $('#view').innerHTML = `<div class="wrap"><table><thead><tr>${head.map(h => `<th>${esc(h)}</th>`).join('')}</tr></thead><tbody>` +
-    (body.length ? shown.map(r => `<tr>${r.map(c => `<td>${cell(c)}</td>`).join('')}</tr>`).join('')
+    (body.length ? shown.map(r => `<tr>${r.map((c, i) => `<td>${cell(c, i, r)}</td>`).join('')}</tr>`).join('')
                  : `<tr><td class="dim" colspan="${head.length}">비어 있음</td></tr>`) + '</tbody></table></div>';
+  $('#view').querySelectorAll('[data-code]').forEach(b => b.onclick = () => openPhotos(b.dataset.code, b.textContent));
 }
 
 // div + role=button: Firefox는 <button>의 드래그를 막음
@@ -221,13 +247,15 @@ async function show(view) {
   try {
     if (view === '반출') await loanBoard();
     else if (view === '조합') await rigBuilder();
-    else { const rows = await load(view); if (current === view) table(rows); }
+    else { const [rows] = await Promise.all([load(view), view === '물품' && loadPhotos()]); if (current === view) table(rows); }
   } catch { $('#view').innerHTML = '<p class="dim">시트를 불러오지 못했습니다. SHEET_ID와 공유 설정(링크가 있는 모든 사용자)을 확인하세요.</p>'; }
 }
 
 $('#edit').href = `https://docs.google.com/spreadsheets/d/${SHEET_ID}/edit`;
 document.querySelectorAll('nav button').forEach(b => b.onclick = () => show(b.dataset.view));
 $('#q').oninput = () => show(current);
+$('#photo-close').onclick = () => $('#photo').close();
+$('#photo').onclick = e => { if (e.target === $('#photo')) $('#photo').close(); }; // 바깥 클릭으로 닫기
 document.addEventListener('keydown', e => { if (e.target.classList?.contains('card') && (e.key === 'Enter' || e.key === ' ')) { e.preventDefault(); e.target.click(); } });
 show('물품');
 </script>
