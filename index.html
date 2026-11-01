@@ -4,28 +4,47 @@
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>별바라기 장비실</title>
 <style>
-  :root { --fg:#000; --bg:#fff; --muted:#6b6b6b; --line:#e5e5e5; }
-  @media (prefers-color-scheme: dark) { :root { --fg:#f2f2f2; --bg:#0a0a0a; --muted:#8a8a8a; --line:#262626; } }
+  :root { --fg:#000; --bg:#fff; --muted:#6b6b6b; --line:#e5e5e5; --soft:#f5f5f5; }
+  @media (prefers-color-scheme: dark) { :root { --fg:#f2f2f2; --bg:#0a0a0a; --muted:#8a8a8a; --line:#262626; --soft:#161616; } }
   * { box-sizing: border-box; }
   body { margin: 0; background: var(--bg); color: var(--fg); font: 14px/1.5 "Pretendard", "Malgun Gothic", system-ui, sans-serif; }
   main { max-width: 1100px; margin: 0 auto; padding: 40px 16px; }
   header { display: flex; justify-content: space-between; align-items: baseline; gap: 16px; flex-wrap: wrap; }
   h1 { font-size: 20px; margin: 0; letter-spacing: -0.01em; }
+  h2 { font-size: 13px; font-weight: 600; color: var(--muted); margin: 0 0 8px; }
   a { color: inherit; }
-  nav { display: flex; gap: 24px; margin: 32px 0 16px; border-bottom: 1px solid var(--line); }
-  nav button { all: unset; cursor: pointer; padding: 8px 0; color: var(--muted); border-bottom: 2px solid transparent; margin-bottom: -1px; }
-  nav button[aria-selected="true"] { color: var(--fg); border-color: var(--fg); }
-  nav button:focus-visible { outline: 2px solid var(--fg); outline-offset: 2px; }
-  input { width: 100%; max-width: 320px; padding: 8px 10px; border: 1px solid var(--line); background: var(--bg); color: var(--fg); font: inherit; }
+  nav { display: flex; gap: 24px; margin: 32px 0 16px; border-bottom: 1px solid var(--line); overflow-x: auto; overflow-y: hidden; scrollbar-width: none; }
+  nav button { all: unset; cursor: pointer; padding: 8px 0; color: var(--muted); white-space: nowrap; }
+  nav button[aria-selected="true"] { color: var(--fg); box-shadow: inset 0 -2px var(--fg); }
+  button:focus-visible { outline: 2px solid var(--fg); outline-offset: 2px; }
+  input { padding: 8px 10px; border: 1px solid var(--line); background: var(--bg); color: var(--fg); font: inherit; }
   input:focus { outline: none; border-color: var(--fg); }
-  .bar { display: flex; justify-content: space-between; align-items: center; gap: 12px; margin-bottom: 12px; }
+  .bar { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: center; gap: 12px; margin-bottom: 12px; }
+  .bar input { width: 100%; max-width: 320px; }
   .count, .muted { color: var(--muted); font-size: 13px; white-space: nowrap; }
   .wrap { overflow-x: auto; }
   table { width: 100%; border-collapse: collapse; white-space: nowrap; }
   th { text-align: left; font-weight: 600; font-size: 12px; color: var(--muted); padding: 8px 12px 8px 0; border-bottom: 1px solid var(--fg); }
   td { padding: 10px 12px 10px 0; border-bottom: 1px solid var(--line); }
-  td:first-child { font-variant-numeric: tabular-nums; font-weight: 600; }
+  td:first-child { font-weight: 600; }
   .dim { color: var(--muted); }
+  .cols { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+  .zone { border: 1px solid var(--line); padding: 12px; min-height: 160px; display: flex; flex-wrap: wrap; align-content: flex-start; gap: 8px; }
+  .zone.over { border-color: var(--fg); background: var(--soft); }
+  .zone h2 { width: 100%; }
+  .card { cursor: grab; user-select: none; border: 1px solid var(--line); padding: 6px 10px; background: var(--bg); max-width: 100%; }
+  .card b { margin-right: 6px; }
+  .card:hover, .card:focus-visible { border-color: var(--fg); outline: none; }
+  .card.warn { border-style: dashed; color: var(--muted); }
+  .slot { border: 1px solid var(--line); padding: 10px 12px; min-height: 48px; display: flex; align-items: center; gap: 12px; }
+  .slot.over { border-color: var(--fg); background: var(--soft); }
+  .slot > span:first-child { width: 72px; color: var(--muted); font-size: 12px; flex: none; }
+  .slots { display: grid; gap: 8px; }
+  .checks { margin: 16px 0 0; padding: 0; list-style: none; }
+  .checks li { padding: 6px 0; border-bottom: 1px solid var(--line); }
+  .fields { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 12px; }
+  .fields input { width: 160px; }
+  @media (max-width: 640px) { .cols { grid-template-columns: 1fr; } }
 </style>
 <main>
   <header>
@@ -33,23 +52,28 @@
     <a id="edit" class="muted" target="_blank" rel="noopener">시트에서 편집 →</a>
   </header>
   <nav role="tablist">
-    <button role="tab" data-sheet="물품">물품 목록</button>
-    <button role="tab" data-sheet="호환">호환표</button>
-    <button role="tab" data-sheet="구매">구매 필요</button>
+    <button role="tab" data-view="물품">물품 목록</button>
+    <button role="tab" data-view="반출">반출</button>
+    <button role="tab" data-view="조합">조합</button>
+    <button role="tab" data-view="성능">성능</button>
+    <button role="tab" data-view="구매">구매 필요</button>
   </nav>
   <div class="bar">
     <input id="q" type="search" placeholder="검색 (이름, 번호, 위치…)" aria-label="검색">
     <span id="count" class="count"></span>
   </div>
-  <div class="wrap"><table id="t"></table></div>
+  <div id="view"></div>
 </main>
 <script>
-// Google 시트 ID (docs.google.com/spreadsheets/d/<여기>/edit). 시트 공유: "링크가 있는 모든 사용자 - 뷰어".
+// Google 시트 ID (docs.google.com/spreadsheets/d/<여기>/edit). 시트 공유: "링크가 있는 모든 사용자 - 뷰어" 이상.
 const SHEET_ID = '15LG_ahpBWunANCyk_0AsmTF4B6I2qQV2jct16SaYqW0';
+// apps-script.gs를 웹 앱으로 배포한 주소. 비어 있으면 반출 보드는 보기만 가능.
+const SCRIPT_URL = '';
 
 const $ = s => document.querySelector(s);
+const esc = s => String(s ?? '').replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
 const cache = {};
-let rows = [], current;
+let current;
 
 function parseCSV(text) {
   const out = []; let row = [], cell = '', q = false;
@@ -75,28 +99,135 @@ async function load(sheet) {
   return cache[sheet];
 }
 
-function render() {
+// 헤더 행 → 객체 배열
+const objects = rows => rows.slice(1).map(r => Object.fromEntries(rows[0].map((h, i) => [h.trim(), (r[i] ?? '').trim()])));
+const terms = () => $('#q').value.trim().toLowerCase().split(/\s+/).filter(Boolean);
+const hit = text => terms().every(t => text.toLowerCase().includes(t));
+const GONE = ['분실', '폐기'];
+
+function table(rows) {
   const [head = [], ...body] = rows;
-  const terms = $('#q').value.trim().toLowerCase().split(/\s+/).filter(Boolean);
-  const hit = body.filter(r => terms.every(t => r.join(' ').toLowerCase().includes(t)));
-  const esc = s => s.replace(/[&<>]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;' }[c]));
+  const shown = body.filter(r => hit(r.join(' ')));
   const cell = s => /^https?:\/\//.test(s) ? `<a href="${esc(s)}" target="_blank" rel="noopener">링크</a>` : esc(s);
-  $('#t').innerHTML = `<thead><tr>${head.map(h => `<th>${esc(h)}</th>`).join('')}</tr></thead>` +
-    `<tbody>${hit.map(r => `<tr>${r.map(c => `<td>${cell(c)}</td>`).join('')}</tr>`).join('')}</tbody>`;
-  $('#count').textContent = body.length ? `${hit.length} / ${body.length}` : '';
-  if (head.length && !body.length) $('#t').innerHTML += `<tbody><tr><td class="dim" colspan="${head.length}">비어 있음</td></tr></tbody>`;
+  $('#count').textContent = body.length ? `${shown.length} / ${body.length}` : '';
+  $('#view').innerHTML = `<div class="wrap"><table><thead><tr>${head.map(h => `<th>${esc(h)}</th>`).join('')}</tr></thead><tbody>` +
+    (body.length ? shown.map(r => `<tr>${r.map(c => `<td>${cell(c)}</td>`).join('')}</tr>`).join('')
+                 : `<tr><td class="dim" colspan="${head.length}">비어 있음</td></tr>`) + '</tbody></table></div>';
 }
 
-async function show(sheet) {
-  current = sheet;
-  document.querySelectorAll('nav button').forEach(b => b.setAttribute('aria-selected', b.dataset.sheet === sheet));
-  $('#t').innerHTML = '<tr><td class="dim">불러오는 중…</td></tr>';
-  try { rows = await load(sheet); if (current === sheet) render(); }
-  catch { $('#t').innerHTML = '<tr><td class="dim">시트를 불러오지 못했습니다. SHEET_ID와 공유 설정(링크가 있는 모든 사용자)을 확인하세요.</td></tr>'; }
+// div + role=button: Firefox는 <button>의 드래그를 막음
+const card = (a, extra = '') => `<div class="card ${extra}" role="button" tabindex="0" draggable="true" data-id="${esc(a['관리번호'])}"><b>${esc(a['관리번호'])}</b>${esc(a['물품명'])}</div>`;
+
+function dropzone(el, onDrop) {
+  el.ondragover = e => { e.preventDefault(); el.classList.add('over'); };
+  el.ondragleave = () => el.classList.remove('over');
+  el.ondrop = e => { e.preventDefault(); el.classList.remove('over'); onDrop(e.dataTransfer.getData('text/plain')); };
+}
+function draggable(root) {
+  root.querySelectorAll('.card').forEach(c => c.ondragstart = e => e.dataTransfer.setData('text/plain', c.dataset.id));
+}
+
+// 반출 중 = 반출 탭에 반납 체크가 안 된 행이 있는 관리번호
+const outIds = loans => new Set(loans.filter(l => l['반납'] !== 'TRUE').map(l => l['관리번호']));
+
+async function loanBoard() {
+  const [assets, loans] = await Promise.all([load('물품'), load('반출')]).then(r => r.map(objects));
+  const out = outIds(loans);
+  const live = assets.filter(a => a['관리번호'] && !GONE.includes(a['상태']) && hit(Object.values(a).join(' ')));
+  const store = live.filter(a => !out.has(a['관리번호'])), away = live.filter(a => out.has(a['관리번호']));
+  const saved = k => { try { return localStorage.getItem(k) || ''; } catch { return ''; } };
+  $('#count').textContent = `반출 중 ${away.length}`;
+  $('#view').innerHTML = `
+    <div class="fields">
+      <input id="event" placeholder="행사 (예: 11월 정관)" value="${esc(saved('event'))}" aria-label="행사">
+      <input id="who" placeholder="담당자" value="${esc(saved('who'))}" aria-label="담당자">
+      <span class="muted">${SCRIPT_URL ? '카드를 끌어 옮기거나 눌러서 반출·반납' : '기록 기능 미설치 (보기 전용)'}</span>
+    </div>
+    <div class="cols">
+      <div class="zone" id="store"><h2>창고 ${store.length}</h2>${store.map(a => card(a, a['상태'] === '수리필요' ? 'warn' : '')).join('')}</div>
+      <div class="zone" id="away"><h2>반출 중 ${away.length}</h2>${away.map(a => card(a)).join('')}</div>
+    </div>`;
+  ['event', 'who'].forEach(k => $('#' + k).onchange = e => { try { localStorage.setItem(k, e.target.value); } catch {} });
+  const move = async (id, to) => {
+    if (!id || out.has(id) === (to === 'away')) return;
+    if (!SCRIPT_URL) return alert('Apps Script 웹 앱 주소(SCRIPT_URL)가 설정되지 않았습니다.');
+    if (to === 'away' && assets.find(a => a['관리번호'] === id)?.['상태'] === '수리필요' && !confirm(`${id}는 수리필요 상태입니다. 그래도 반출할까요?`)) return;
+    let password = saved('password') || prompt('운영진 비밀번호');
+    if (!password) return;
+    const res = await fetch(SCRIPT_URL, { method: 'POST', headers: { 'Content-Type': 'text/plain' }, // text/plain: CORS 사전요청 회피
+      body: JSON.stringify({ action: to === 'away' ? 'out' : 'in', id, event: $('#event').value, who: $('#who').value, password }) })
+      .then(r => r.json()).catch(() => ({ ok: false, error: '연결 실패' }));
+    try { res.ok ? localStorage.setItem('password', password) : res.error.includes('비밀번호') && localStorage.removeItem('password'); } catch {}
+    if (!res.ok) return alert(res.error);
+    delete cache['반출'];
+    loanBoard();
+  };
+  dropzone($('#store'), id => move(id, 'store'));
+  dropzone($('#away'), id => move(id, 'away'));
+  draggable($('#view'));
+  $('#view').querySelectorAll('.card').forEach(c => c.onclick = () => move(c.dataset.id, out.has(c.dataset.id) ? 'store' : 'away'));
+}
+
+const SLOTS = [['OT', '경통'], ['MT', '가대'], ['TP', '삼각대'], ['GU', '파인더'], ['EP', '접안렌즈']];
+const rig = {}; // 분류코드 → 관리번호
+
+async function rigBuilder() {
+  const [assets, specs, loans] = await Promise.all([load('물품'), load('성능'), load('반출')]).then(r => r.map(objects));
+  const byId = Object.fromEntries(assets.map(a => [a['관리번호'], a]));
+  const spec = Object.fromEntries(specs.map(s => [s['관리번호'], s]));
+  const out = outIds(loans);
+  const links = new Set(); // 호환 열은 한쪽에만 적어도 양방향으로 읽음
+  assets.forEach(a => (a['호환'] || '').split(/[\s,]+/).filter(Boolean).forEach(b => { links.add(a['관리번호'] + '|' + b); links.add(b + '|' + a['관리번호']); }));
+  const pool = assets.filter(a => SLOTS.some(([p]) => a['관리번호'].startsWith(p)) && !GONE.includes(a['상태']) && hit(Object.values(a).join(' ')));
+  $('#count').textContent = '';
+
+  const checks = [];
+  for (const [a, b] of [['OT', 'MT'], ['MT', 'TP'], ['OT', 'GU'], ['OT', 'EP']]) {
+    if (!rig[a] || !rig[b]) continue;
+    checks.push(links.has(rig[a] + '|' + rig[b]) ? `${rig[a]} – ${rig[b]}: 호환 기록 있음` : `${rig[a]} – ${rig[b]}: 호환 기록 없음 (직접 확인 필요)`);
+  }
+  if (rig.MT) {
+    const load_ = ['OT', 'GU', 'EP'].filter(p => rig[p]).map(p => rig[p]);
+    const limit = parseFloat(spec[rig.MT]?.['탑재한도_kg']);
+    const unknown = load_.filter(id => isNaN(parseFloat(spec[id]?.['무게_kg'])));
+    const sum = load_.reduce((s, id) => s + (parseFloat(spec[id]?.['무게_kg']) || 0), 0);
+    if (load_.length) checks.push(isNaN(limit) ? `${rig.MT} 탑재한도 미기록` :
+      unknown.length ? `무게 미기록: ${unknown.join(', ')} (탑재한도 ${limit} kg)` :
+      `탑재 ${sum.toFixed(1)} kg / 한도 ${limit} kg (${Math.round(sum / limit * 100)}%)${sum / limit > 0.7 ? ' — 권장(70%) 초과' : ''}`);
+  }
+  Object.values(rig).forEach(id => {
+    if (out.has(id)) checks.push(`${id}: 반출 중`);
+    if (byId[id] && !['정상', '제한사용'].includes(byId[id]['상태'])) checks.push(`${id}: 상태 ${byId[id]['상태'] || '미기록'}`);
+  });
+
+  $('#view').innerHTML = `<div class="cols">
+    <div><h2>장비 (끌어서 오른쪽에 놓거나 누르기)</h2><div class="zone" id="pool">${pool.map(a => card(a, out.has(a['관리번호']) ? 'warn' : '')).join('')}</div></div>
+    <div><h2>조합</h2><div class="slots">${SLOTS.map(([p, label]) => `<div class="slot" data-p="${p}"><span>${label}</span>${rig[p] && byId[rig[p]] ? card(byId[rig[p]]) : '<span class="dim">비어 있음</span>'}</div>`).join('')}</div>
+    <ul class="checks">${checks.map(c => `<li>${esc(c)}</li>`).join('') || '<li class="dim">장비를 두 개 이상 놓으면 호환·무게를 확인합니다.</li>'}</ul></div></div>`;
+
+  const place = id => { const p = id.slice(0, 2); if (SLOTS.some(([s]) => s === p)) { rig[p] = id; rigBuilder(); } };
+  draggable($('#view'));
+  $('#pool').querySelectorAll('.card').forEach(c => c.onclick = () => place(c.dataset.id));
+  $('#view').querySelectorAll('.slot').forEach(s => {
+    dropzone(s, id => { if (id.startsWith(s.dataset.p)) place(id); });
+    const c = s.querySelector('.card'); if (c) c.onclick = () => { delete rig[s.dataset.p]; rigBuilder(); };
+  });
+}
+
+async function show(view) {
+  current = view;
+  document.querySelectorAll('nav button').forEach(b => b.setAttribute('aria-selected', b.dataset.view === view));
+  $('#view').innerHTML = '<p class="dim">불러오는 중…</p>';
+  try {
+    if (view === '반출') await loanBoard();
+    else if (view === '조합') await rigBuilder();
+    else { const rows = await load(view); if (current === view) table(rows); }
+  } catch { $('#view').innerHTML = '<p class="dim">시트를 불러오지 못했습니다. SHEET_ID와 공유 설정(링크가 있는 모든 사용자)을 확인하세요.</p>'; }
 }
 
 $('#edit').href = `https://docs.google.com/spreadsheets/d/${SHEET_ID}/edit`;
-document.querySelectorAll('nav button').forEach(b => b.onclick = () => show(b.dataset.sheet));
-$('#q').oninput = render;
+document.querySelectorAll('nav button').forEach(b => b.onclick = () => show(b.dataset.view));
+$('#q').oninput = () => show(current);
+document.addEventListener('keydown', e => { if (e.target.classList?.contains('card') && (e.key === 'Enter' || e.key === ' ')) { e.preventDefault(); e.target.click(); } });
 show('물품');
 </script>
