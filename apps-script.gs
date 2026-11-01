@@ -4,8 +4,13 @@
 //       → 배포 → 새 배포 → 웹 앱 (실행: 나, 액세스: 모든 사용자) → 주소를 index.html SCRIPT_URL에
 // 코드를 고친 뒤에는 배포 → 배포 관리 → 수정 → 새 버전 (주소 유지)
 
-// 사진 파일명: 관리번호_이름_YYYYMMDD.확장자 (예: MT07_AZ-GTi_20261101.jpg). 규칙에 안 맞는 파일은 무시.
-const PHOTO_NAME = /^([A-Z]{2}\d{2,})_(.+)_(\d{8})\.[a-z0-9]+$/i;
+// 사진 파일명: 관리번호로 시작하고 날짜(YYYYMMDD 또는 YYYY-MM-DD)가 들어 있으면 됨. 이름은 선택.
+// 예: MT07_20261101.jpg, MT07_AZ-GTi_20261101.jpg, MT07-2026-11-01.png. 둘 중 하나라도 없으면 무시.
+function parsePhotoName(name) {
+  const m = name.match(/^([A-Z]{2}\d{2,})([_\-\s].*)?\.[a-z0-9]+$/i);
+  const d = m && (m[2] || '').match(/(\d{4})-?(\d{2})-?(\d{2})(?!.*\d{4}-?\d{2}-?\d{2})/); // 마지막 날짜
+  return d ? { code: m[1].toUpperCase(), date: d[1] + d[2] + d[3] } : null;
+}
 
 function doGet() {
   const folder = DriveApp.getFolderById(PropertiesService.getScriptProperties().getProperty('PHOTO_FOLDER'));
@@ -13,10 +18,9 @@ function doGet() {
   const files = folder.getFiles();
   while (files.hasNext()) {
     const f = files.next();
-    const m = f.getName().match(PHOTO_NAME);
-    if (!m || !f.getMimeType().startsWith('image/')) continue;
-    const id = m[1].toUpperCase();
-    (out[id] = out[id] || []).push({ id: f.getId(), name: f.getName(), date: m[3] });
+    const p = parsePhotoName(f.getName());
+    if (!p || !f.getMimeType().startsWith('image/')) continue;
+    (out[p.code] = out[p.code] || []).push({ id: f.getId(), name: f.getName(), date: p.date });
   }
   Object.values(out).forEach(list => list.sort((a, b) => b.date.localeCompare(a.date))); // 최신 사진 먼저
   return reply(out);
