@@ -71,7 +71,6 @@
     <button role="tab" data-view="물품">물품 목록</button>
     <button role="tab" data-view="반출">반출</button>
     <button role="tab" data-view="조합">조합</button>
-    <button role="tab" data-view="성능">성능</button>
     <button role="tab" data-view="구매">구매 필요</button>
   </nav>
   <div class="bar">
@@ -128,34 +127,38 @@ async function loadPhotos() {
   if (!photos) photos = SCRIPT_URL ? await fetch(SCRIPT_URL).then(r => r.json()).catch(() => ({})) : {};
   return photos;
 }
-// 분류별로 보여 줄 성능 항목 (성능 탭의 열 이름). 열을 늘리면 여기에도 추가.
+// 분류별로 보여 줄 성능 열 (물품 탭의 열 이름). 시트에 없는 열은 자동으로 숨김.
 const SPEC_FIELDS = {
-  OT: ['구경_mm', '초점거리_mm', '무게_kg', '광학 규격', '장착 규격'],
-  MT: ['탑재한도_kg', '무게_kg', '장착 규격', '전원'],
-  TP: ['무게_kg', '장착 규격'],
+  OT: ['구경_mm', '초점거리_mm', '무게_kg', '광학 규격'],
+  MT: ['탑재한도_kg', '무게_kg'],
+  TP: ['무게_kg'],
   EP: ['초점거리_mm', '겉보기시야_도', '광학 규격'],
-  GU: ['구경_mm', '초점거리_mm', '장착 규격'],
-  CA: ['센서', '픽셀크기_um', '광학 규격', '전원', '무게_kg'],
+  GU: ['구경_mm', '초점거리_mm'],
+  CA: ['센서', '픽셀크기_um', '광학 규격', '무게_kg'],
   LE: ['초점거리_mm', '광학 규격'],
-  CO: ['광학 규격'], DG: ['광학 규격'], FL: ['광학 규격'], FW: ['광학 규격', '전원'], FC: ['광학 규격'], AD: ['광학 규격', '장착 규격'],
-  CT: ['전원'], PW: ['전원', '용량_Wh'], CB: ['전원'], CW: ['무게_kg'],
+  CO: ['광학 규격'], MR: ['광학 규격'], EX: ['광학 규격'], FL: ['광학 규격'], FW: ['광학 규격'], FC: ['광학 규격'], AD: ['광학 규격'],
+  PW: ['용량_Wh'], CW: ['무게_kg'],
 };
-const fieldsOf = code => SPEC_FIELDS[code.slice(0, 2)] || ['무게_kg'];
-const SPEC_TAIL = ['근거', '확인일', '비고'];
+// 세부 분류: 관리번호 앞 3자 (OT101 = 굴절 경통, EP201 = 2" 접안렌즈)
+const SUBTYPES = { OT1: '굴절', OT2: '반사', OT3: '돕소니언', EP1: '1.25"', EP2: '2"' };
+let HEAD = []; // 물품 탭 열 이름
+const fieldsOf = code => (SPEC_FIELDS[code.slice(0, 2)] || []).filter(k => HEAD.includes(k));
+const categoryOf = a => { const sub = SUBTYPES[a['관리번호'].slice(0, 3)]; const cat = a['분류'] || a['관리번호'].slice(0, 2); return sub ? `${cat} · ${sub}` : cat; };
+const loadAssets = () => load('물품').then(rows => { HEAD = rows[0].map(h => h.trim()); return objects(rows).filter(a => a['관리번호']); });
 
 // 장비 상세: 물품 정보 + 분류별 성능 + 사진
 async function openItem(code) {
-  const [assets, specs] = await Promise.all([load('물품'), load('성능')]).then(r => r.map(objects));
+  const assets = await loadAssets();
   await loadPhotos();
-  const a = assets.find(x => x['관리번호'] === code) || {}, sp = specs.find(x => x['관리번호'] === code) || {};
+  const a = assets.find(x => x['관리번호'] === code) || {};
   const row = (k, v) => `<dt>${esc(k)}</dt><dd>${v ? esc(v) : '<span class="dim">—</span>'}</dd>`;
-  const info = ['분류', '상태', '위치', '소속', '호환', '최근점검일', '기존번호', '비고'].filter(k => a[k]).map(k => row(k, a[k])).join('');
-  const spec = fieldsOf(code).map(k => row(k, sp[k])).join('') + SPEC_TAIL.filter(k => sp[k]).map(k => row(k, sp[k])).join('');
+  const info = ['분류', '상태', '위치', '소속', '호환', '최근점검일', '기존번호', '비고'].filter(k => a[k]).map(k => row(k, k === '분류' ? categoryOf(a) : a[k])).join('');
+  const spec = fieldsOf(code).map(k => row(k, a[k])).join('');
   const pics = (photos[code] || []).map(p => `<figure><a href="https://drive.google.com/file/d/${esc(p.id)}/view" target="_blank" rel="noopener">` +
     `<img src="https://drive.google.com/thumbnail?id=${esc(p.id)}&sz=w1000" alt="${esc(code)} 사진" loading="lazy"></a>` +
     `<figcaption>${esc(p.date.replace(/(\d{4})(\d\d)(\d\d)/, '$1-$2-$3'))} · ${esc(p.name)}</figcaption></figure>`).join('');
   $('#photo-title').textContent = `${code} ${a['물품명'] || ''}`;
-  $('#photos').innerHTML = `<dl>${info}</dl><h3>성능</h3><dl>${spec}</dl><h3>사진</h3>` +
+  $('#photos').innerHTML = `<dl>${info}</dl>` + (spec ? `<h3>성능</h3><dl>${spec}</dl>` : '') + '<h3>사진</h3>' +
     (pics || '<p class="dim">사진 없음 (별바라기-장비사진 폴더에 관리번호_날짜 형식으로 올리기)</p>');
   if (!$('#photo').open) $('#photo').showModal();
 }
@@ -164,29 +167,26 @@ const linkItems = root => root.querySelectorAll('[data-code]').forEach(b => b.on
 function table(rows) {
   const [head = [], ...body] = rows;
   const shown = body.filter(r => hit(r.join(' ')));
-  const [ci, ni] = [head.indexOf('관리번호'), head.indexOf('물품명')];
   const link = s => /^https?:\/\//.test(s) ? `<a href="${esc(s)}" target="_blank" rel="noopener">링크</a>` : esc(s);
-  const mark = code => photos?.[code]?.length ? ' <span class="dim">· 사진</span>' : '';
-  const cell = (s, i, r) => ci >= 0 && i === ni && r[ci] ? `<button class="link" data-code="${esc(r[ci])}">${esc(s)}</button>${mark(r[ci])}` : link(s);
   $('#count').textContent = body.length ? `${shown.length} / ${body.length}` : '';
   $('#view').innerHTML = `<div class="wrap"><table><thead><tr>${head.map(h => `<th>${esc(h)}</th>`).join('')}</tr></thead><tbody>` +
-    (body.length ? shown.map(r => `<tr>${r.map((c, i) => `<td>${cell(c, i, r)}</td>`).join('')}</tr>`).join('')
+    (body.length ? shown.map(r => `<tr>${r.map(c => `<td>${link(c)}</td>`).join('')}</tr>`).join('')
                  : `<tr><td class="dim" colspan="${head.length}">비어 있음</td></tr>`) + '</tbody></table></div>';
-  linkItems($('#view'));
 }
 
-// 성능: 분류별 표, 그 분류에 맞는 열만
-async function specView() {
-  const [assets, specs] = await Promise.all([load('물품'), load('성능')]).then(r => r.map(objects));
-  const cat = Object.fromEntries(assets.map(a => [a['관리번호'], a['분류'] || a['관리번호'].slice(0, 2)]));
-  const shown = specs.filter(s => s['관리번호'] && hit(Object.values(s).join(' ') + ' ' + cat[s['관리번호']]));
+// 물품 목록: 분류별 표, 기본 열 + 그 분류에 맞는 성능 열
+const BASE_COLS = ['상태', '위치', '호환', '비고'];
+async function itemsView() {
+  const [assets] = await Promise.all([loadAssets(), loadPhotos()]);
+  const shown = assets.filter(a => hit(Object.values(a).join(' ') + ' ' + categoryOf(a)));
   const groups = new Map();
-  shown.forEach(s => { const k = cat[s['관리번호']] || s['관리번호'].slice(0, 2); if (!groups.has(k)) groups.set(k, []); groups.get(k).push(s); });
-  $('#count').textContent = `${shown.length} / ${specs.length}`;
+  shown.forEach(a => { const k = categoryOf(a); if (!groups.has(k)) groups.set(k, []); groups.get(k).push(a); });
+  const mark = code => photos?.[code]?.length ? ' <span class="dim">· 사진</span>' : '';
+  $('#count').textContent = `${shown.length} / ${assets.length}`;
   $('#view').innerHTML = [...groups].map(([k, list]) => {
-    const cols = [...fieldsOf(list[0]['관리번호']), ...SPEC_TAIL];
+    const cols = [...fieldsOf(list[0]['관리번호']), ...BASE_COLS.filter(c => HEAD.includes(c))];
     return `<h2 style="margin-top:24px">${esc(k)} ${list.length}</h2><div class="wrap"><table><thead><tr><th>관리번호</th><th>물품명</th>${cols.map(c => `<th>${esc(c)}</th>`).join('')}</tr></thead><tbody>` +
-      list.map(s => `<tr><td>${esc(s['관리번호'])}</td><td><button class="link" data-code="${esc(s['관리번호'])}">${esc(s['물품명'])}</button></td>${cols.map(c => `<td>${esc(s[c])}</td>`).join('')}</tr>`).join('') +
+      list.map(a => `<tr><td>${esc(a['관리번호'])}</td><td><button class="link" data-code="${esc(a['관리번호'])}">${esc(a['물품명'])}</button>${mark(a['관리번호'])}</td>${cols.map(c => `<td>${esc(a[c])}</td>`).join('')}</tr>`).join('') +
       '</tbody></table></div>';
   }).join('') || '<p class="dim">결과 없음</p>';
   linkItems($('#view'));
@@ -201,7 +201,6 @@ function boxes(list, keyOf, extra = () => '') {
   list.forEach(a => { const k = keyOf(a); if (!m.has(k)) m.set(k, []); m.get(k).push(a); });
   return [...m].map(([k, items]) => `<div class="box"><h3>${esc(k)} ${items.length}</h3>${items.map(a => card(a, extra(a))).join('')}</div>`).join('');
 }
-const categoryOf = a => a['분류'] || a['관리번호'].slice(0, 2);
 
 function dropzone(el, onDrop) {
   el.ondragover = e => { e.preventDefault(); el.classList.add('over'); };
@@ -216,7 +215,7 @@ function draggable(root) {
 const outIds = loans => new Set(loans.filter(l => l['반납'] !== 'TRUE').map(l => l['관리번호']));
 
 async function loanBoard() {
-  const [assets, loans] = await Promise.all([load('물품'), load('반출')]).then(r => r.map(objects));
+  const [assets, loans] = await Promise.all([loadAssets(), load('반출').then(objects)]);
   const out = outIds(loans);
   const live = assets.filter(a => a['관리번호'] && !GONE.includes(a['상태']) && hit(Object.values(a).join(' ')));
   const store = live.filter(a => !out.has(a['관리번호'])), away = live.filter(a => out.has(a['관리번호']));
@@ -257,12 +256,12 @@ const SLOTS = [['OT', '경통'], ['MT', '가대'], ['TP', '삼각대'], ['GU', '
 const rig = {}; // 분류코드 → 관리번호
 
 async function rigBuilder() {
-  const [assets, specs, loans] = await Promise.all([load('물품'), load('성능'), load('반출')]).then(r => r.map(objects));
+  const [assets, loans] = await Promise.all([loadAssets(), load('반출').then(objects)]);
   const byId = Object.fromEntries(assets.map(a => [a['관리번호'], a]));
-  const spec = Object.fromEntries(specs.map(s => [s['관리번호'], s]));
+  const spec = byId; // 성능 값은 물품 탭의 열에 있음
   const out = outIds(loans);
   const links = new Set(); // 호환 열은 한쪽에만 적어도 양방향으로 읽음
-  assets.forEach(a => (a['호환'] || '').split(/[\s,]+/).filter(Boolean).forEach(b => { links.add(a['관리번호'] + '|' + b); links.add(b + '|' + a['관리번호']); }));
+  assets.forEach(a => (a['호환'] || '').toUpperCase().match(/[A-Z]{2}\d{2,}/g)?.forEach(b => { links.add(a['관리번호'] + '|' + b); links.add(b + '|' + a['관리번호']); }));
   const pool = assets.filter(a => SLOTS.some(([p]) => a['관리번호'].startsWith(p)) && !GONE.includes(a['상태']) && hit(Object.values(a).join(' ')));
   $('#count').textContent = '';
 
@@ -282,7 +281,8 @@ async function rigBuilder() {
   }
   // 광학 계산: 배율 = 경통 초점거리 / 접안렌즈 초점거리, 실시야 = 겉보기시야 / 배율, 사출동공 = 구경 / 배율
   const optics = [];
-  const num = (id, col) => parseFloat(spec[id]?.[col]);
+  // 접안렌즈 초점거리가 비어 있으면 이름의 '14mm'에서 읽음
+  const num = (id, col) => parseFloat(spec[id]?.[col]) || (col === '초점거리_mm' && id.startsWith('EP') ? parseFloat((spec[id]?.['물품명'] || '').match(/(\d+(?:\.\d+)?)\s*mm/i)?.[1]) : NaN);
   if (rig.OT) {
     const F = num(rig.OT, '초점거리_mm'), D = num(rig.OT, '구경_mm');
     if (F && D) optics.push(`${rig.OT}: 구경 ${D} mm · 초점거리 ${F} mm · f/${(F / D).toFixed(1)} · 최대 유효배율 약 ${Math.round(2 * D)}×`);
@@ -305,7 +305,7 @@ async function rigBuilder() {
   });
 
   $('#view').innerHTML = `<div class="cols">
-    <div><h2>장비 (끌어서 오른쪽에 놓거나 누르기)</h2><div class="zone" id="pool">${boxes(SLOTS.flatMap(([p]) => pool.filter(a => a['관리번호'].startsWith(p))), a => SLOTS.find(([p]) => a['관리번호'].startsWith(p))[1], a => out.has(a['관리번호']) ? 'warn' : '')}</div></div>
+    <div><h2>장비 (끌어서 오른쪽에 놓거나 누르기)</h2><div class="zone" id="pool">${boxes(SLOTS.flatMap(([p]) => pool.filter(a => a['관리번호'].startsWith(p))).sort((x, y) => SLOTS.findIndex(([p]) => x['관리번호'].startsWith(p)) - SLOTS.findIndex(([p]) => y['관리번호'].startsWith(p)) || x['관리번호'].localeCompare(y['관리번호'])), categoryOf, a => out.has(a['관리번호']) ? 'warn' : '')}</div></div>
     <div><h2>조합</h2><div class="slots">${SLOTS.map(([p, label]) => `<div class="slot" data-p="${p}"><span>${label}</span>${rig[p] && byId[rig[p]] ? card(byId[rig[p]]) : '<span class="dim">비어 있음</span>'}</div>`).join('')}</div>
     ${optics.length ? `<ul class="checks">${optics.map(c => `<li>${esc(c)}</li>`).join('')}</ul>` : ''}
     <ul class="checks">${checks.map(c => `<li>${esc(c)}</li>`).join('') || '<li class="dim">장비를 두 개 이상 놓으면 호환·무게를 확인합니다.</li>'}</ul></div></div>`;
@@ -326,8 +326,8 @@ async function show(view) {
   try {
     if (view === '반출') await loanBoard();
     else if (view === '조합') await rigBuilder();
-    else if (view === '성능') await specView();
-    else { const [rows] = await Promise.all([load(view), view === '물품' && loadPhotos()]); if (current === view) table(rows); }
+    else if (view === '물품') await itemsView();
+    else { const rows = await load(view); if (current === view) table(rows); }
   } catch { $('#view').innerHTML = '<p class="dim">시트를 불러오지 못했습니다. SHEET_ID와 공유 설정(링크가 있는 모든 사용자)을 확인하세요.</p>'; }
 }
 
